@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo da Velha Multiplayer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: white;
+            border: 2px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .cell:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .status {
+            font-size: 24px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .connection-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-radius: 5px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Jogo da Velha Multiplayer</h1>
+        
+        <div class="status" id="status">Aguardando conexão...</div>
+        
+        <div class="board" id="board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+        
+        <div class="controls">
+            <button id="hostBtn">Criar Partida</button>
+            <button id="joinBtn">Entrar em Partida</button>
+            <button id="resetBtn" disabled>Reiniciar Jogo</button>
+        </div>
+        
+        <div class="connection-info" id="connectionInfo">
+            Compartilhe este link com o outro jogador:
+            <div id="gameLink" style="word-break: break-all; margin-top: 5px;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Elementos do DOM
+        const board = document.getElementById('board');
+        const cells = document.querySelectorAll('.cell');
+        const statusDisplay = document.getElementById('status');
+        const hostBtn = document.getElementById('hostBtn');
+        const joinBtn = document.getElementById('joinBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const connectionInfo = document.getElementById('connectionInfo');
+        const gameLink = document.getElementById('gameLink');
+        
+        // Variáveis do jogo
+        let gameState = ['', '', '', '', '', '', '', '', ''];
+        let currentPlayer = 'X';
+        let gameActive = false;
+        let isHost = false;
+        let peer = null;
+        let conn = null;
+        
+        // Esconder informações de conexão inicialmente
+        connectionInfo.style.display = 'none';
+        
+        // Condições de vitória
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // linhas
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // colunas
+            [0, 4, 8], [2, 4, 6]             // diagonais
+        ];
+        
+        // Inicializar PeerJS (simulação, pois precisaria da biblioteca real)
+        function initPeerJS() {
+            // Em um cenário real, você usaria a biblioteca PeerJS
+            // Aqui estamos simulando uma conexão local entre duas abas
+            if (isHost) {
+                statusDisplay.textContent = 'Aguardando outro jogador...';
+                gameLink.textContent = window.location.href + '?join=true';
+                connectionInfo.style.display = 'block';
+                
+                // Simulando conexão após 2 segundos (para demonstração)
+                setTimeout(() => {
+                    conn = {
+                        send: function(data) {
+                            // Simula o envio de dados para o outro jogador
+                            if (window.receiveGameData) {
+                                window.receiveGameData(data);
+                            }
+                        }
+                    };
+                    startGame();
+                }, 2000);
+            } else {
+                statusDisplay.textContent = 'Conectado! Você é o jogador O';
+                currentPlayer = 'O';
+                
+                // Simulando conexão
+                conn = {
+                    send: function(data) {
+                        // Simula o envio de dados para o outro jogador
+                        if (window.receiveGameData) {
+                            window.receiveGameData(data);
+                        }
+                    }
+                };
+                
+                startGame();
+            }
+        }
+        
+        // Função para simular recebimento de dados (usando storage event)
+        window.receiveGameData = function(data) {
+            if (data.type === 'move') {
+                handleReceivedMove(data.index);
+            } else if (data.type === 'reset') {
+                resetGame();
+            }
+        };
+        
+        // Iniciar o jogo
+        function startGame() {
+            gameActive = true;
+            updateStatus();
+        }
+        
+        // Atualizar o status do jogo
+        function updateStatus() {
+            if (gameActive) {
+                statusDisplay.textContent = `Vez do jogador ${currentPlayer}`;
+            }
+        }
+        
+        // Verificar vitória ou empate
+        function checkResult() {
+            let roundWon = false;
+            
+            for (let i = 0; i < winningConditions.length; i++) {
+                const [a, b, c] = winningConditions[i];
+                
+                if (gameState[a] && gameState[a] === gameState[b] && gameState[a] === gameState[c]) {
+                    roundWon = true;
+                    break;
+                }
+            }
+            
+            if (roundWon) {
+                statusDisplay.textContent = `Jogador ${currentPlayer} venceu!`;
+                gameActive = false;
+                resetBtn.disabled = false;
+                return;
+            }
+            
+            if (!gameState.includes('')) {
+                statusDisplay.textContent = 'Empate!';
+                gameActive = false;
+                resetBtn.disabled = false;
+                return;
+            }
+            
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            updateStatus();
+        }
+        
+        // Lidar com clique na célula
+        function handleCellClick(e) {
+            if (!gameActive) return;
+            
+            const clickedCell = e.target;
+            const clickedCellIndex = parseInt(clickedCell.getAttribute('data-index'));
+            
+            if (gameState[clickedCellIndex] !== '') return;
+            
+            // Verificar se é a vez do jogador
+            if ((isHost && currentPlayer !== 'X') || (!isHost && currentPlayer !== 'O')) {
+                return;
+            }
+            
+            gameState[clickedCellIndex] = currentPlayer;
+            clickedCell.textContent = currentPlayer;
+            
+            // Enviar movimento para o outro jogador
+            if (conn) {
+                conn.send({ type: 'move', index: clickedCellIndex });
+            }
+            
+            checkResult();
+        }
+        
+        // Lidar com movimento recebido
+        function handleReceivedMove(index) {
+            gameState[index] = currentPlayer;
+            cells[index].textContent = currentPlayer;
+            checkResult();
+        }
+        
+        // Reiniciar o jogo
+        function resetGame() {
+            gameState = ['', '', '', '', '', '', '', '', ''];
+            currentPlayer = 'X';
+            gameActive = true;
+            
+            cells.forEach(cell => {
+                cell.textContent = '';
+            });
+            
+            statusDisplay.textContent = `Vez do jogador ${currentPlayer}`;
+            resetBtn.disabled = true;
+        }
+        
+        // Event listeners
+        cells.forEach(cell => {
+            cell.addEventListener('click', handleCellClick);
+        });
+        
+        hostBtn.addEventListener('click', () => {
+            isHost = true;
+            hostBtn.disabled = true;
+            joinBtn.disabled = true;
+            initPeerJS();
+        });
+        
+        joinBtn.addEventListener('click', () => {
+            isHost = false;
+            hostBtn.disabled = true;
+            joinBtn.disabled = true;
+            initPeerJS();
+        });
+        
+        resetBtn.addEventListener('click', () => {
+            if (conn) {
+                conn.send({ type: 'reset' });
+            }
+            resetGame();
+        });
+        
+        // Verificar se está entrando em uma partida existente
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('join')) {
+            isHost = false;
+            hostBtn.disabled = true;
+            joinBtn.disabled = true;
+            initPeerJS();
+        }
+    </script>
+</body>
+</html>
